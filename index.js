@@ -3,6 +3,8 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const neo4j = require('neo4j-driver').v1;
 const neo_creds = require('./constants.js').neo_creds;
+const parser = require('concepts-parser');
+const unfluff = require('unfluff');
 
 const driver = neo4j.driver("bolt://54.213.194.217:7687", neo4j.auth.basic(neo_creds.username, neo_creds.password));
 const session = driver.session();
@@ -26,8 +28,45 @@ const postToNeo = transactions => {
   return tx.commit().catch(console.log);
 };
 
+const concept_extract = text => {
+  text = unfluff(text).text;
+
+  let concept_dict = {};
+  let all_concepts = [];
+  let average = 0;
+  let sum = 0;
+
+  let concepts = parser.parse({text: text, lang: 'en'});
+  for(let concept of concepts) {
+    if(concept.value.indexOf('.') < 0) {
+      if(concept_dict[concept.value])
+        concept_dict[concept.value] += 1;
+      else
+        concept_dict[concept.value] = 1;
+
+      average += 1;
+    }
+  }
+
+  let count = concepts.length;
+  average = average / count;
+
+  for(let concept in concept_dict) {
+     sum += (concept_dict[concept] - average) * (concept_dict[concept] - average);
+  }
+  let stdev = Math.sqrt(sum / count);
+
+  for(let concept in concept_dict) {
+     if(concept_dict[concept] < average + (1 * stdev))
+      delete concept_dict[concept];
+  }
+
+  return concept_dict;
+}
+
 app.post('/site_visit', (req, res) => {
   let transactions = [];
+  let concept_transactions = [];
   let previous = req.body.previous;
   let current = req.body.current;
 
@@ -44,10 +83,22 @@ app.post('/site_visit', (req, res) => {
     `);
   }
 
-
   return postToNeo(transactions)
-    .then(res => transactions[0])
-    .catch(err => console.log(err));
+    .then(result => axios.get(current.url))
+    .then(result => {
+      let concepts = concept_extract(result.data);
+
+      for(let concept in concepts) {
+        concept_transactions.push(`
+          MATCH (s: Site {url: "${current.url}", time: ${current.time}})
+          MERGE (c: Concept {id: "${concept}"})
+          MERGE (s)-[:HAS_CONCEPT]->(c)
+        `);
+      }
+      return postToNeo(concept_transactions);
+    })
+    .then(result => transactions[0])
+    .catch(console.log);
 
 });
 
