@@ -5,6 +5,7 @@ const neo4j = require('neo4j-driver').v1;
 const neo_creds = require('./constants.js').neo_creds;
 const parser = require('concepts-parser');
 const unfluff = require('unfluff');
+const blacklist = require('./blacklist.json');
 
 const driver = neo4j.driver("bolt://54.213.194.217:7687", neo4j.auth.basic(neo_creds.username, neo_creds.password));
 const session = driver.session();
@@ -37,12 +38,13 @@ const concept_extract = text => {
   let sum = 0;
 
   let concepts = parser.parse({text: text, lang: 'en'});
-  for(let concept of concepts) {
-    if(concept.value.indexOf('.') < 0) {
-      if(concept_dict[concept.value])
-        concept_dict[concept.value] += 1;
+  for(let con of concepts) {
+    let concept = con.value.toLowerCase();
+    if(concept.indexOf('.') < 0 && blacklist.indexOf(concept) < 0) {
+      if(concept_dict[concept])
+        concept_dict[concept] += 1;
       else
-        concept_dict[concept.value] = 1;
+        concept_dict[concept] = 1;
 
       average += 1;
     }
