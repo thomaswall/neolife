@@ -29,6 +29,10 @@ const postToNeo = transactions => {
   return tx.commit().catch(console.log);
 };
 
+const queryNeo = query => {
+  return session.run(query).then(result => result.records).catch(console.log)
+}
+
 const concept_extract = text => {
   text = unfluff(text).text;
 
@@ -62,7 +66,7 @@ const concept_extract = text => {
      if(concept_dict[concept] < average + (1 * stdev))
       delete concept_dict[concept];
   }
-
+  console.log(concept_dict);
   return concept_dict;
 }
 
@@ -102,6 +106,49 @@ app.post('/site_visit', (req, res) => {
     .then(result => transactions[0])
     .catch(console.log);
 
+});
+
+app.get('/concept', (req, res) => {
+  let concept = req.query.concept;
+  if(!concept)
+    res.json('no concept found');
+
+  let query = `
+    MATCH (c: Concept {id: "${concept}"})-[:HAS_CONCEPT]-(s:Site)
+    MATCH path=(s)-[:NEXT*]-(d:Site)
+    return distinct(path)
+    order by length(path) desc
+  `;
+
+  queryNeo(query)
+    .then(results => {
+      let path_dict = {};
+      let paths = [];
+      for(let result of results) {
+        let path = [];
+        for(let link of result._fields[0].segments) {
+
+          let time = link.start.properties.time.low;
+          let url = `${link.start.properties.url}-${time}`;
+          let length = result._fields[0].segments.length;
+
+          if(!(path_dict[url]) || length > path_dict[url].length) {
+            path_dict[url] = {
+              time: time,
+              length: result._fields[0].segments.length
+            };
+
+            path.push(link.start.properties.url);
+          }
+          else {
+            break;
+          }
+        }
+        if(path.length > 1)
+          paths.push(path);
+      }
+      res.json(paths);
+    });
 });
 
 const server = app.listen(3000, '0.0.0.0', () => {
