@@ -63,7 +63,7 @@ const concept_extract = text => {
   let stdev = Math.sqrt(sum / count);
 
   for(let concept in concept_dict) {
-     if(concept_dict[concept] < average + (1 * stdev))
+     if(concept_dict[concept] < average + (0.5 * stdev))
       delete concept_dict[concept];
   }
   console.log(concept_dict);
@@ -114,8 +114,9 @@ app.get('/concept', (req, res) => {
     res.json('no concept found');
 
   let query = `
-    MATCH (c: Concept {id: "${concept}"})-[:HAS_CONCEPT]-(s:Site)
+    MATCH (c: Concept)-[:HAS_CONCEPT]-(s:Site)
     MATCH path=(s)-[:NEXT*]-(d:Site)
+    WHERE c.id =~ "(?i).*${concept}.*"
     return distinct(path)
     order by length(path) desc
   `;
