@@ -66,9 +66,40 @@ const concept_extract = text => {
      if(concept_dict[concept] < average + (0.5 * stdev))
       delete concept_dict[concept];
   }
-  console.log(concept_dict);
+
   return concept_dict;
 }
+
+const longest_paths = results => {
+  let path_dict = {};
+  let paths = [];
+  for(let result of results) {
+    let path = [];
+
+    for(let link of result._fields[0].segments) {
+
+      let time = link.start.properties.time.low;
+      let url = `${link.start.properties.url}-${time}`;
+      let length = result._fields[0].segments.length;
+
+      if(!(path_dict[url]) || length > path_dict[url].length) {
+        path_dict[url] = {
+          time: time,
+          length: result._fields[0].segments.length
+        };
+
+        if(path.length == 0 || (path.length && path[path.length - 1] != link.start.properties.url))
+          path.push(link.start.properties.url);
+      }
+      else {
+        break;
+      }
+    }
+    if(path.length > 1)
+      paths.push(path);
+  }
+  return paths;
+};
 
 app.post('/site_visit', (req, res) => {
   let transactions = [];
@@ -78,14 +109,14 @@ app.post('/site_visit', (req, res) => {
 
   if(previous) {
     transactions.push(`
-      MATCH (s1: Site {url: "${previous.url}", time: ${previous.time}})
-      MERGE (s2: Site {url: "${current.url}", time: ${current.time}})
-      MERGE (s1)-[:NEXT]->(s2)
+      MATCH (s1: Site {url: "${previous.url}"})
+      MERGE (s2: Site {url: "${current.url}"})
+      MERGE (s1)-[:NEXT {time: ${current.time}}]->(s2)
     `);
   }
   else {
     transactions.push(`
-       MERGE (s: Site {url: "${current.url}", time: ${current.time}})
+       MERGE (s: Site {url: "${current.url}"})
     `);
   }
 
@@ -96,7 +127,7 @@ app.post('/site_visit', (req, res) => {
 
       for(let concept in concepts) {
         concept_transactions.push(`
-          MATCH (s: Site {url: "${current.url}", time: ${current.time}})
+          MATCH (s: Site {url: "${current.url}"})
           MERGE (c: Concept {id: "${concept}"})
           MERGE (s)-[:HAS_CONCEPT]->(c)
         `);
@@ -121,35 +152,7 @@ app.get('/concept', (req, res) => {
     order by length(path) desc
   `;
 
-  queryNeo(query)
-    .then(results => {
-      let path_dict = {};
-      let paths = [];
-      for(let result of results) {
-        let path = [];
-        for(let link of result._fields[0].segments) {
-
-          let time = link.start.properties.time.low;
-          let url = `${link.start.properties.url}-${time}`;
-          let length = result._fields[0].segments.length;
-
-          if(!(path_dict[url]) || length > path_dict[url].length) {
-            path_dict[url] = {
-              time: time,
-              length: result._fields[0].segments.length
-            };
-
-            path.push(link.start.properties.url);
-          }
-          else {
-            break;
-          }
-        }
-        if(path.length > 1)
-          paths.push(path);
-      }
-      res.json(paths);
-    });
+  queryNeo(query).then(results => res.json(longest_paths(results)));
 });
 
 const server = app.listen(3000, '0.0.0.0', () => {
