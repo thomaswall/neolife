@@ -8,7 +8,7 @@ const unfluff = require('unfluff');
 const blacklist = require('./blacklist.json');
 
 const driver = neo4j.driver("bolt://54.213.194.217:7687", neo4j.auth.basic(neo_creds.username, neo_creds.password));
-const session = driver.session();
+let session;
 
 const app = express();
 
@@ -22,15 +22,27 @@ app.use((req, res, next) => {
 });
 
 const postToNeo = transactions => {
+  session = driver.session();
   let tx = session.beginTransaction();
   for(let trans of transactions) {
     tx.run(trans).catch(console.log);
   }
-  return tx.commit().catch(console.log);
+  return tx.commit()
+    .then(result => {
+      session.close();
+      return result;
+    })
+    .catch(console.log);
 };
 
 const queryNeo = query => {
-  return session.run(query).then(result => result.records).catch(console.log)
+  session = driver.session();
+  return session.run(query)
+    .then(result => {
+      session.close();
+      return result.records;
+    })
+    .catch(console.log)
 }
 
 const concept_extract = text => {
