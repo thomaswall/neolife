@@ -90,7 +90,7 @@ const longest_paths = results => {
 
     for(let link of result._fields[0].segments) {
 
-      let time = link.start.properties.time.low;
+      let time = link.relationship.properties.time.low;
       let url = `${link.start.properties.url}-${time}`;
       let length = result._fields[0].segments.length;
 
