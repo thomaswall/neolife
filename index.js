@@ -158,7 +158,7 @@ app.get('/concept', (req, res) => {
 
   let query = `
     MATCH (c: Concept)-[:HAS_CONCEPT]-(s:Site)
-    MATCH path=(s)-[:NEXT*]-(d:Site)
+    MATCH path=(s)-[:NEXT*]->(d:Site)
     WHERE c.id =~ "(?i).*${concept}.*"
     return distinct(path)
     order by length(path) desc
